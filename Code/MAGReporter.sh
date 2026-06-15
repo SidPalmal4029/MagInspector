@@ -2,7 +2,33 @@
 set -euo pipefail
 
 # =========================================================
-# ARGUMENTS
+# HELP FUNCTION
+# =========================================================
+show_help() {
+cat << 'EOF'
+Usage:
+  MAGReporter.sh --bins <dir> --outdir <dir> [options]
+
+Required:
+  --bins <dir>        Directory with MAG FASTA files (*.fa)
+  --outdir <dir>      Output directory
+
+Optional:
+  --threads <int>     Number of threads (default: 8)
+  --reads1 <file>     Forward reads (FASTQ)
+  --reads2 <file>     Reverse reads (FASTQ)
+
+Other:
+  -h, --help          Show this help message
+
+Notes:
+  • --reads1 and --reads2 must be provided together
+  • Input files must have .fa extension
+EOF
+}
+
+# =========================================================
+# DEFAULTS
 # =========================================================
 BINS=""
 OUTDIR=""
@@ -10,23 +36,109 @@ THREADS=8
 R1=""
 R2=""
 
+# =========================================================
+# ARGUMENT PARSING (ROBUST)
+# =========================================================
+if [[ $# -eq 0 ]]; then
+    echo "[ERROR] No arguments provided"
+    show_help
+    exit 1
+fi
+
 while [[ $# -gt 0 ]]; do
-    case $1 in
-        --bins) BINS="$2"; shift 2 ;;
-        --outdir) OUTDIR="$2"; shift 2 ;;
-        --threads) THREADS="$2"; shift 2 ;;
-        --reads1) R1="$2"; shift 2 ;;
-        --reads2) R2="$2"; shift 2 ;;
-        *) echo "[ERROR] Unknown arg $1"; exit 1 ;;
+    case "$1" in
+        --bins)
+            [[ -n "${2:-}" ]] || { echo "[ERROR] --bins requires a value"; exit 1; }
+            BINS="$2"
+            shift 2
+            ;;
+        --outdir)
+            [[ -n "${2:-}" ]] || { echo "[ERROR] --outdir requires a value"; exit 1; }
+            OUTDIR="$2"
+            shift 2
+            ;;
+        --threads)
+            [[ -n "${2:-}" ]] || { echo "[ERROR] --threads requires a value"; exit 1; }
+            [[ "$2" =~ ^[0-9]+$ ]] || { echo "[ERROR] --threads must be an integer"; exit 1; }
+            THREADS="$2"
+            shift 2
+            ;;
+        --reads1)
+            [[ -n "${2:-}" ]] || { echo "[ERROR] --reads1 requires a value"; exit 1; }
+            R1="$2"
+            shift 2
+            ;;
+        --reads2)
+            [[ -n "${2:-}" ]] || { echo "[ERROR] --reads2 requires a value"; exit 1; }
+            R2="$2"
+            shift 2
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo "[ERROR] Unknown argument: $1"
+            echo "Use --help for usage"
+            exit 1
+            ;;
     esac
 done
 
-[[ -z "$BINS" || -z "$OUTDIR" ]] && { echo "[ERROR] bins/outdir required"; exit 1; }
+# =========================================================
+# INPUT VALIDATION
+# =========================================================
+
+# Required args
+[[ -z "$BINS" ]] && { echo "[ERROR] --bins is required"; exit 1; }
+[[ -z "$OUTDIR" ]] && { echo "[ERROR] --outdir is required"; exit 1; }
+
+# Directory checks
+[[ -d "$BINS" ]] || { echo "[ERROR] bins directory not found: $BINS"; exit 1; }
+
+# Reads validation
+if [[ -n "$R1" || -n "$R2" ]]; then
+    [[ -n "$R1" && -n "$R2" ]] || {
+        echo "[ERROR] Both --reads1 and --reads2 must be provided together"
+        exit 1
+    }
+
+    [[ -f "$R1" ]] || { echo "[ERROR] reads1 file not found: $R1"; exit 1; }
+    [[ -f "$R2" ]] || { echo "[ERROR] reads2 file not found: $R2"; exit 1; }
+fi
+
+# Threads sanity
+if (( THREADS < 1 )); then
+    echo "[ERROR] --threads must be >= 1"
+    exit 1
+fi
+
+# =========================================================
+# OUTPUT DIRECTORY SETUP (STRICT)
+# =========================================================
 
 QC="$OUTDIR"
 LOG="$QC/logs/mag_qc.log"
 
-mkdir -p "$QC"/{logs,checkm2,gtdbtk,rrna,trna,silva,bbmap,coverage,tmp}
+# Try to create output directory
+if [[ ! -d "$QC" ]]; then
+    mkdir -p "$QC" 2>/dev/null || {
+        echo "[ERROR] Failed to create output directory: $QC"
+        exit 1
+    }
+fi
+
+# Create subdirectories (fail if any issue)
+mkdir -p "$QC"/{logs,checkm2,gtdbtk,rrna,trna,silva,bbmap,coverage,tmp} 2>/dev/null || {
+    echo "[ERROR] Failed to create subdirectories in: $QC"
+    exit 1
+}
+
+# Check write permission (important edge case)
+if [[ ! -w "$QC" ]]; then
+    echo "[ERROR] Output directory is not writable: $QC"
+    exit 1
+fi
 
 echo "[QC] START" | tee -a "$LOG"
 
