@@ -6,6 +6,6 @@ This tool does a comprehensive check of MAGS or bins from Binning tools and crea
 
 # How to Install
 For installation, run the command 
-git clone https://github.com/SidPalmal4029/MagInspector.git
-cd MagInspector
-bash Installer.sh --threads <n>
+'git clone https://github.com/SidPalmal4029/MagInspector.git
+'cd MagInspector
+'bash Installer.sh --threads <n>
