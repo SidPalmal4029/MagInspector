@@ -222,7 +222,7 @@ mkdir -p "$ACTIVATE_DIR" "$DEACTIVATE_DIR"
 cat << EOF > "$ACTIVATE_DIR/db_paths.sh"
 export GTDBTK_DATA_PATH="$GTDB_DIR"
 export SILVA_DB="$SILVA_DIR/silva_nr99"
-export CHECKM2DB="$CHECKM2_DIR/database.dmnd"
+export CHECKM2DB="$CHECKM2_DIR"
 EOF
 
 cat << EOF > "$DEACTIVATE_DIR/db_paths.sh"
